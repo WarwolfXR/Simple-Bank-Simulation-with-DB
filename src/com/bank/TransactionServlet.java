@@ -1,16 +1,17 @@
 package com.bank;
 
 import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.sql.SQLException;
 
-//@WebServlet("/transaction")
 public class TransactionServlet extends HttpServlet {
 
+    @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         // Show form for transaction (deposit/withdraw)
@@ -29,49 +30,62 @@ public class TransactionServlet extends HttpServlet {
         out.println("</form>");
     }
 
+    @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String accNo = request.getParameter("accNo");
         String amountStr = request.getParameter("amount");
         String type = request.getParameter("type");
-        double amount = 0;
+        double amount;
 
         response.setContentType("text/html");
         PrintWriter out = response.getWriter();
 
         if (accNo == null || amountStr == null || type == null ||
                 accNo.isEmpty() || amountStr.isEmpty() || type.isEmpty()) {
-            out.println("All fields are required.");
+            out.println("<p style='color:red;'>All fields are required.</p>");
             return;
         }
 
         try {
             amount = Double.parseDouble(amountStr);
         } catch (NumberFormatException e) {
-            out.println("Invalid amount.");
+            out.println("<p style='color:red;'>Invalid amount.</p>");
             return;
         }
 
         if (!AccountServlet.accounts.containsKey(accNo)) {
-            out.println("Account does not exist.");
+            out.println("<p style='color:red;'>Account does not exist.</p>");
             return;
         }
 
         double currentBalance = AccountServlet.accounts.get(accNo);
+        boolean success = false;
 
-        if (type.equals("withdraw")) {
+        if ("withdraw".equals(type)) {
             if (amount > currentBalance) {
-                out.println("Insufficient balance.");
+                out.println("<p style='color:red;'>Insufficient balance.</p>");
                 return;
             }
             AccountServlet.accounts.put(accNo, currentBalance - amount);
+            success = true;
             out.println("<h2>Withdrawal Successful</h2>");
-        } else if (type.equals("deposit")) {
+        } else if ("deposit".equals(type)) {
             AccountServlet.accounts.put(accNo, currentBalance + amount);
+            success = true;
             out.println("<h2>Deposit Successful</h2>");
         } else {
-            out.println("Invalid transaction type.");
+            out.println("<p style='color:red;'>Invalid transaction type.</p>");
             return;
+        }
+
+        if (success) {
+            try {
+                DatabaseUtil.insertTransaction(accNo, type, amount);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                out.println("<p style='color:red;'>Error saving transaction to database.</p>");
+            }
         }
 
         out.println("<p>Account No: " + accNo + "</p>");
